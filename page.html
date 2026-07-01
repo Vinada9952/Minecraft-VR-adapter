@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="mobile-web-app-capable" content="yes">
+<title>VR Stream</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 101%;
+    background: #000;
+    overflow-y: scroll;
+    font-family: -apple-system, sans-serif;
+  }
+
+  #vrContainer {
+    display: none;
+    width: 100%;
+    height: 100%;
+    --warpTL: 0;
+    --warpTR: 0;
+    --warpBL: 0;
+    --warpBR: 0;
+  }
+
+  .eye {
+    width: 50%;
+    height: 100%;
+    overflow: hidden;
+    position: relative;
+    float: left;
+    background: #000;
+  }
+
+  .eye img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+    clip-path: polygon(
+      calc(var(--warpTL) * 1%) calc(var(--warpTL) * 1%),
+      calc(100% - var(--warpTR) * 1%) calc(var(--warpTR) * 1%),
+      calc(100% - var(--warpBR) * 1%) calc(100% - var(--warpBR) * 1%),
+      calc(var(--warpBL) * 1%) calc(100% - var(--warpBL) * 1%)
+    );
+  }
+
+  #startScreen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: #0a0a0f;
+    color: #e8e8e8;
+    text-align: center;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+
+  #startScreen h1 {
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
+
+  #startScreen p {
+    font-size: 14px;
+    color: #999;
+    margin-bottom: 24px;
+    max-width: 320px;
+  }
+
+  #startBtn {
+    background: #5865f2;
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    font-size: 17px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+  #status {
+    position: fixed;
+    bottom: 8px;
+    left: 8px;
+    color: #555;
+    font-size: 11px;
+    z-index: 999;
+    font-family: monospace;
+  }
+</style>
+</head>
+<body>
+
+  <div id="startScreen">
+    <h1>Stream VR</h1>
+    <p id="fsHint">Pour un vrai plein écran (sans barre Safari), ouvre cette page,
+       appuie sur Partager → "Sur l'écran d'accueil", puis relance-la depuis
+       l'icône ajoutée. Sinon elle marche aussi directement dans Safari.</p>
+
+    <label for="sensSlider" style="font-size:13px;color:#aaa;">
+      Sensibilité souris : <span id="sensValue">1.0</span>x
+    </label>
+    <input type="range" id="sensSlider" min="0.1" max="5" step="0.1" value="1.0"
+           style="width:240px;margin:10px 0 22px;">
+
+    <button id="startBtn">Démarrer</button>
+  </div>
+
+  <div id="vrContainer">
+    <div class="eye left"><img id="imgLeft" alt=""></div>
+    <div class="eye right"><img id="imgRight" alt=""></div>
+  </div>
+
+  <div id="status"></div>
+
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <script>
+    const socket = io();
+    const imgLeft = document.getElementById("imgLeft");
+    const imgRight = document.getElementById("imgRight");
+    const statusEl = document.getElementById("status");
+
+    let frameCount = 0;
+    let lastFpsTime = Date.now();
+    let lastObjectUrl = null;
+
+    socket.on("connect", () => {
+      statusEl.textContent = "Connecté au serveur";
+    });
+
+    socket.on("disconnect", () => {
+      statusEl.textContent = "Déconnecté";
+    });
+
+    socket.emit("get_settings");
+
+    socket.on("settings", (data) => {
+      const vrContainer = document.getElementById("vrContainer");
+      vrContainer.style.setProperty("--warpTL", data.warpTL || 0);
+      vrContainer.style.setProperty("--warpTR", data.warpTR || 0);
+      vrContainer.style.setProperty("--warpBL", data.warpBL || 0);
+      vrContainer.style.setProperty("--warpBR", data.warpBR || 0);
+    });
+
+    // Les frames arrivent en BINAIRE (ArrayBuffer), pas en base64 :
+    // c'est plus rapide à recevoir et moins lourd sur le réseau.
+    socket.on("frame", (data) => {
+      const blob = new Blob([data], { type: "image/jpeg" });
+      const url = URL.createObjectURL(blob);
+
+      imgLeft.src = url;
+      imgRight.src = url;
+
+      // On libère l'ancienne URL pour éviter une fuite mémoire
+      if (lastObjectUrl) URL.revokeObjectURL(lastObjectUrl);
+      lastObjectUrl = url;
+
+      frameCount++;
+      const now = Date.now();
+      if (now - lastFpsTime >= 1000) {
+        statusEl.textContent = frameCount + " FPS";
+        frameCount = 0;
+        lastFpsTime = now;
+      }
+    });
+
+    // ---------- Sensibilité (calibration en direct) ----------
+    let sensitivity = 1.0;
+    const sensSlider = document.getElementById("sensSlider");
+    const sensValue = document.getElementById("sensValue");
+    sensSlider.addEventListener("input", () => {
+      sensitivity = parseFloat(sensSlider.value);
+      sensValue.textContent = sensitivity.toFixed(1);
+    });
+
+    // ---------- Gyroscope ----------
+    // On utilise rotationRate (vitesse de rotation brute en °/s) plutôt que
+    // les angles absolus alpha/beta/gamma. Ces derniers subissent un
+    // "gimbal lock" quand le téléphone est tenu à la verticale (comme en VR,
+    // beta proche de 90°), ce qui provoque des sauts brusques de la souris.
+    // rotationRate vient directement du gyroscope, sans ce calcul d'angle
+    // instable : pas de saut possible.
+    let lastSent = 0;
+    const SEND_INTERVAL_MS = 16; // ~60 envois/seconde max
+
+    function handleMotion(event) {
+      const now = Date.now();
+      if (now - lastSent < SEND_INTERVAL_MS) return;
+      lastSent = now;
+
+      const r = event.rotationRate;
+      if (!r || r.beta === null || r.gamma === null) return;
+      socket.emit("gyro", {
+        beta: r.beta,    // vitesse de tangage (°/s) -> regarder haut/bas
+        // gamma: r.gamma,  // vitesse de roulis (°/s)  -> regarder gauche/droite (téléphone vertical)
+        gamma: r.alpha,  // vitesse de roulis (°/s)  -> regarder gauche/droite (téléphone vertical)
+        sensitivity: sensitivity
+      });
+    }
+
+    // ---------- Empêcher la mise en veille ----------
+    let wakeLock = null;
+
+    async function requestWakeLock() {
+      try {
+        if ("wakeLock" in navigator) {
+          wakeLock = await navigator.wakeLock.request("screen");
+          wakeLock.addEventListener("release", () => {
+            statusEl.textContent += " | wakeLock relâché";
+          });
+        }
+      } catch (err) {
+        statusEl.textContent = "Wake lock indisponible: " + err.message;
+      }
+    }
+
+    // Le wake lock est automatiquement relâché si l'app passe en arrière-plan
+    // (ex: changement d'app) -> on le redemande quand on revient au premier plan
+    document.addEventListener("visibilitychange", () => {
+      if (document.visibilityState === "visible") {
+        requestWakeLock();
+      }
+    });
+
+    function enterFullscreenAndLockOrientation() {
+      const el = document.documentElement;
+      const req = el.requestFullscreen || el.webkitRequestFullscreen;
+      if (req) {
+        req.call(el).catch(() => {});
+      }
+      // Astuce pour réduire (pas supprimer) la barre d'adresse Safari :
+      // on force un micro-scroll, répété car Safari la fait parfois
+      // réapparaître juste après le chargement.
+      window.scrollTo(0, 1);
+      setTimeout(() => window.scrollTo(0, 1), 300);
+      setTimeout(() => window.scrollTo(0, 1), 1000);
+    }
+
+    // Si la page est déjà lancée depuis l'icône "écran d'accueil", on est
+    // déjà en plein écran natif -> pas besoin d'afficher l'astuce.
+    if (window.navigator.standalone === true) {
+      document.getElementById("fsHint").style.display = "none";
+    }
+
+    document.getElementById("startBtn").addEventListener("click", () => {
+      socket.emit("start_stream");
+
+      // Demande de permission iOS 13+ pour le gyroscope (doit être déclenchée
+      // par un geste utilisateur, d'où le bouton)
+      if (typeof DeviceMotionEvent !== "undefined" &&
+          typeof DeviceMotionEvent.requestPermission === "function") {
+        DeviceMotionEvent.requestPermission()
+          .then((state) => {
+            if (state === "granted") {
+              window.addEventListener("devicemotion", handleMotion);
+            } else {
+              statusEl.textContent = "Permission gyroscope refusée";
+            }
+          })
+          .catch((err) => {
+            statusEl.textContent = "Erreur permission: " + err;
+          });
+      } else {
+        // Android / anciens iOS : pas besoin de permission explicite
+        window.addEventListener("devicemotion", handleMotion);
+      }
+
+      enterFullscreenAndLockOrientation();
+      requestWakeLock();
+
+      document.getElementById("startScreen").style.display = "none";
+      document.getElementById("vrContainer").style.display = "block";
+    });
+  </script>
+</body>
+</html>

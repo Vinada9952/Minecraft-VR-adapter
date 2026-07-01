@@ -1,0 +1,321 @@
+﻿<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Parametres PC - VR Adapter</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --bg: #111318;
+    --panel: #1b1f28;
+    --panel-2: #222838;
+    --text: #f3f5f7;
+    --muted: #9ca6b6;
+    --accent: #47c2ff;
+    --ok: #58d68d;
+    --border: #343b4c;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    min-height: 100vh;
+    font-family: Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: 28px;
+  }
+
+  main {
+    width: min(900px, 100%);
+    margin: 0 auto;
+  }
+
+  h1 {
+    margin: 0 0 8px;
+    font-size: 28px;
+    font-weight: 700;
+  }
+
+  .subtitle {
+    margin: 0 0 24px;
+    color: var(--muted);
+    line-height: 1.45;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: minmax(280px, 1fr) 320px;
+    gap: 18px;
+    align-items: start;
+  }
+
+  section, .preview {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 18px;
+  }
+
+  h2 {
+    margin: 0 0 14px;
+    font-size: 17px;
+  }
+
+  .field {
+    display: grid;
+    grid-template-columns: 1fr 130px;
+    gap: 14px;
+    align-items: center;
+    padding: 12px 0;
+    border-top: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .field:first-of-type { border-top: 0; }
+
+  label {
+    display: block;
+    font-weight: 600;
+  }
+
+  .hint {
+    display: block;
+    margin-top: 4px;
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  input[type="number"] {
+    width: 100%;
+    min-width: 0;
+    padding: 10px 11px;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: #111722;
+    color: var(--text);
+    font-size: 16px;
+  }
+
+  input[type="number"]:focus {
+    outline: 2px solid rgba(71, 194, 255, 0.35);
+    border-color: var(--accent);
+  }
+
+  .actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-top: 18px;
+    align-items: center;
+  }
+
+  button {
+    border: 0;
+    border-radius: 6px;
+    padding: 10px 15px;
+    color: white;
+    background: #2f80ed;
+    font-size: 15px;
+    cursor: pointer;
+  }
+
+  button.secondary {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+  }
+
+  #status {
+    color: var(--ok);
+    min-height: 20px;
+    font-size: 14px;
+  }
+
+  .screen {
+    position: relative;
+    aspect-ratio: 16 / 9;
+    background:
+      linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px),
+      linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px),
+      linear-gradient(135deg, #1e7cff, #0f1523 55%, #33d17a);
+    background-size: 32px 32px, 32px 32px, auto;
+    clip-path: polygon(
+      calc(var(--tl, 0) * 1%) calc(var(--tl, 0) * 1%),
+      calc(100% - var(--tr, 0) * 1%) calc(var(--tr, 0) * 1%),
+      calc(100% - var(--br, 0) * 1%) calc(100% - var(--br, 0) * 1%),
+      calc(var(--bl, 0) * 1%) calc(100% - var(--bl, 0) * 1%)
+    );
+  }
+
+  .preview p {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.4;
+    margin: 12px 0 0;
+  }
+
+  @media (max-width: 760px) {
+    body { padding: 18px; }
+    .layout { grid-template-columns: 1fr; }
+    .field { grid-template-columns: 1fr; gap: 8px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>Parametres VR</h1>
+  <p class="subtitle">Page a ouvrir sur l'ordinateur. Les valeurs negatives sont acceptees pour inverser ou etendre les corrections.</p>
+
+  <div class="layout">
+    <section>
+      <h2>Controle</h2>
+
+      <div class="field">
+        <div>
+          <label for="mouseSensitivityX">Sensibilite horizontale</label>
+          <span class="hint">1 = normal, -1 = gauche/droite inverse, 0 = aucun mouvement horizontal.</span>
+        </div>
+        <input id="mouseSensitivityX" type="number" step="0.1" value="-1">
+      </div>
+
+      <div class="field">
+        <div>
+          <label for="mouseSensitivityY">Sensibilite verticale</label>
+          <span class="hint">1 = normal, -1 = haut/bas inverse, 0 = aucun mouvement vertical.</span>
+        </div>
+        <input id="mouseSensitivityY" type="number" step="0.1" value="-1">
+      </div>
+
+      <h2>Warping des coins</h2>
+
+      <div class="field">
+        <div>
+          <label for="warpTL">Coin haut gauche</label>
+          <span class="hint">Deplace ce coin en pourcentage. Une valeur negative l'ouvre vers l'exterieur.</span>
+        </div>
+        <input id="warpTL" type="number" step="0.1" value="0">
+      </div>
+
+      <div class="field">
+        <div>
+          <label for="warpTR">Coin haut droit</label>
+          <span class="hint">Accepte aussi les valeurs negatives.</span>
+        </div>
+        <input id="warpTR" type="number" step="0.1" value="0">
+      </div>
+
+      <div class="field">
+        <div>
+          <label for="warpBL">Coin bas gauche</label>
+          <span class="hint">Accepte aussi les valeurs negatives.</span>
+        </div>
+        <input id="warpBL" type="number" step="0.1" value="0">
+      </div>
+
+      <div class="field">
+        <div>
+          <label for="warpBR">Coin bas droit</label>
+          <span class="hint">Accepte aussi les valeurs negatives.</span>
+        </div>
+        <input id="warpBR" type="number" step="0.1" value="0">
+      </div>
+
+      <div class="actions">
+        <button id="saveBtn" type="button">Enregistrer</button>
+        <button id="resetBtn" class="secondary" type="button">Remettre a zero</button>
+        <span id="status"></span>
+      </div>
+    </section>
+
+    <aside class="preview">
+      <h2>Apercu du warp</h2>
+      <div id="screenPreview" class="screen"></div>
+      <p>Les changements sont envoyes au serveur et appliques a la page VR connectee.</p>
+    </aside>
+  </div>
+</main>
+
+<script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+<script>
+  const socket = io();
+  const fields = ["mouseSensitivityX", "mouseSensitivityY", "warpTL", "warpTR", "warpBL", "warpBR"];
+  const statusEl = document.getElementById("status");
+  const preview = document.getElementById("screenPreview");
+
+  function numberValue(id) {
+    const value = parseFloat(document.getElementById(id).value);
+    return Number.isFinite(value) ? value : 0;
+  }
+
+  function readSettings() {
+    return {
+      mouseSensitivityX: numberValue("mouseSensitivityX"),
+      mouseSensitivityY: numberValue("mouseSensitivityY"),
+      warpTL: numberValue("warpTL"),
+      warpTR: numberValue("warpTR"),
+      warpBL: numberValue("warpBL"),
+      warpBR: numberValue("warpBR")
+    };
+  }
+
+  function applyPreview(data) {
+    preview.style.setProperty("--tl", data.warpTL || 0);
+    preview.style.setProperty("--tr", data.warpTR || 0);
+    preview.style.setProperty("--bl", data.warpBL || 0);
+    preview.style.setProperty("--br", data.warpBR || 0);
+  }
+
+  function fillForm(data) {
+    fields.forEach((id) => {
+      if (data[id] !== undefined) {
+        document.getElementById(id).value = data[id];
+      }
+    });
+    applyPreview(readSettings());
+  }
+
+  function save() {
+    const data = readSettings();
+    applyPreview(data);
+    socket.emit("update_settings", data);
+    statusEl.textContent = "Enregistre";
+    setTimeout(() => { statusEl.textContent = ""; }, 1400);
+  }
+
+  fields.forEach((id) => {
+    document.getElementById(id).addEventListener("input", () => {
+      applyPreview(readSettings());
+    });
+  });
+
+  document.getElementById("saveBtn").addEventListener("click", save);
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    fillForm({
+      mouseSensitivityX: -1,
+      mouseSensitivityY: -1,
+      warpTL: 0,
+      warpTR: 0,
+      warpBL: 0,
+      warpBR: 0
+    });
+    save();
+  });
+
+  socket.on("connect", () => {
+    statusEl.textContent = "Connecte";
+    socket.emit("get_settings");
+    setTimeout(() => { statusEl.textContent = ""; }, 1000);
+  });
+
+  socket.on("disconnect", () => {
+    statusEl.textContent = "Deconnecte";
+  });
+
+  socket.on("settings", fillForm);
+</script>
+</body>
+</html>
+
+

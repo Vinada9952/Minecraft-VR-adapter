@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>Test Gyroscope</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    background: #0a0a0f;
+    overflow: hidden;
+    font-family: -apple-system, sans-serif;
+    color: #e8e8e8;
+  }
+
+  #startScreen {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 24px;
+    box-sizing: border-box;
+    z-index: 10;
+  }
+
+  #startScreen h1 { font-size: 22px; margin-bottom: 8px; }
+  #startScreen p { font-size: 14px; color: #999; max-width: 320px; margin-bottom: 24px; }
+
+  #startBtn {
+    background: #5865f2;
+    color: white;
+    border: none;
+    padding: 16px 32px;
+    font-size: 17px;
+    border-radius: 12px;
+    cursor: pointer;
+  }
+
+  #arenaWrap {
+    display: none;
+    width: 100%;
+    height: 100%;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #arena {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    border-radius: 50%;
+    border: 2px solid #333;
+    background: radial-gradient(circle at center, #15151c 0%, #0a0a0f 100%);
+  }
+
+  #ball {
+    position: absolute;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 35%, #8fa2ff, #5865f2);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    box-shadow: 0 0 12px rgba(88, 101, 242, 0.6);
+  }
+
+  #debug {
+    margin-top: 24px;
+    font-family: monospace;
+    font-size: 13px;
+    color: #888;
+    text-align: center;
+    line-height: 1.6;
+  }
+
+  #debug span { color: #ccc; }
+
+  /* ---------- Notifications ---------- */
+  #notifContainer {
+    position: fixed;
+    bottom: 16px;
+    left: 16px;
+    right: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+    align-items: center;
+  }
+
+  .notif {
+    background: #2a1a1f;
+    border: 1px solid #c0392b;
+    color: #ffb3ad;
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 13px;
+    max-width: 360px;
+    width: 100%;
+    box-sizing: border-box;
+    cursor: pointer;
+    animation: slideUp 0.2s ease-out;
+  }
+
+  .notif .notif-title {
+    font-weight: 600;
+    margin-bottom: 2px;
+  }
+
+  .notif .notif-hint {
+    font-size: 11px;
+    color: #c98e88;
+    margin-top: 4px;
+  }
+
+  @keyframes slideUp {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---------- Modal (message complet) ---------- */
+  #modalOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+    box-sizing: border-box;
+  }
+
+  #modalBox {
+    background: #1a1a22;
+    border: 1px solid #333;
+    border-radius: 12px;
+    padding: 20px;
+    max-width: 420px;
+    width: 100%;
+    max-height: 70vh;
+    overflow-y: auto;
+  }
+
+  #modalBox h3 { margin: 0 0 10px; font-size: 15px; color: #ff8a80; }
+
+  #modalBox pre {
+    white-space: pre-wrap;
+    word-break: break-word;
+    font-size: 12px;
+    color: #ccc;
+    font-family: monospace;
+    margin: 0 0 16px;
+  }
+
+  #modalClose {
+    background: #333;
+    color: #eee;
+    border: none;
+    padding: 10px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+
+  <div id="startScreen">
+    <h1>Test Gyroscope</h1>
+    <p>Appuie sur le bouton pour autoriser l'accès au capteur de mouvement,
+       puis incline le téléphone : la bille doit suivre la gravité.</p>
+    <button id="startBtn">Démarrer le test</button>
+  </div>
+
+  <div id="arenaWrap">
+    <div id="arena"><div id="ball"></div></div>
+    <div id="debug">
+      x: <span id="dbgX">0.00</span> &nbsp;
+      y: <span id="dbgY">0.00</span> &nbsp;
+      z: <span id="dbgZ">0.00</span>
+    </div>
+  </div>
+
+  <div id="notifContainer"></div>
+
+  <div id="modalOverlay">
+    <div id="modalBox">
+      <h3>Détails de l'erreur</h3>
+      <pre id="modalText"></pre>
+      <button id="modalClose">Fermer</button>
+    </div>
+  </div>
+
+<script>
+  // ============== Système de notifications ==============
+  const notifContainer = document.getElementById("notifContainer");
+  const modalOverlay = document.getElementById("modalOverlay");
+  const modalText = document.getElementById("modalText");
+
+  function showError(shortMessage, fullMessage) {
+    const notif = document.createElement("div");
+    notif.className = "notif";
+    notif.innerHTML = `
+      <div class="notif-title">⚠ ${shortMessage}</div>
+      <div class="notif-hint">Touche pour voir le détail</div>
+    `;
+    notif.addEventListener("click", () => {
+      modalText.textContent = fullMessage || shortMessage;
+      modalOverlay.style.display = "flex";
+    });
+    notifContainer.appendChild(notif);
+
+    // Auto-disparition après 10s (sans bloquer le clic avant ça)
+    setTimeout(() => {
+      if (notif.parentNode) notif.remove();
+    }, 10000);
+  }
+
+  document.getElementById("modalClose").addEventListener("click", () => {
+    modalOverlay.style.display = "none";
+  });
+  modalOverlay.addEventListener("click", (e) => {
+    if (e.target === modalOverlay) modalOverlay.style.display = "none";
+  });
+
+  // Capture les erreurs JS non gérées
+  window.addEventListener("error", (e) => {
+    showError("Erreur JavaScript", `${e.message}\n${e.filename}:${e.lineno}:${e.colno}\n\n${e.error ? e.error.stack : ""}`);
+  });
+
+  // ============== Vérification du contexte sécurisé ==============
+  // iOS bloque l'accès aux capteurs de mouvement sur les pages non-HTTPS
+  // (sauf localhost). C'est la cause la plus fréquente de "ça ne marche pas".
+  if (!window.isSecureContext) {
+    showError(
+      "Page non sécurisée (HTTP)",
+      "Cette page est servie en HTTP, pas en HTTPS.\n\n" +
+      "Sur iOS, les navigateurs (Safari ET Chrome, qui utilisent tous deux WebKit) " +
+      "bloquent l'accès au gyroscope/accéléromètre sur les pages non-HTTPS, sauf si " +
+      "l'adresse est 'localhost'.\n\n" +
+      "URL actuelle : " + window.location.href + "\n\n" +
+      "Solutions possibles :\n" +
+      "1. Servir la page via HTTPS (certificat auto-signé + accepter l'avertissement " +
+      "de sécurité dans Safari).\n" +
+      "2. Utiliser un tunnel HTTPS gratuit comme ngrok ou Cloudflare Tunnel pointant " +
+      "vers ton serveur Flask local.\n\n" +
+      "Si malgré ce message les données du gyroscope s'affichent quand même plus bas, " +
+      "ignore cet avertissement : ton navigateur fait peut-être une exception."
+    );
+  }
+
+  if (typeof DeviceMotionEvent === "undefined") {
+    showError(
+      "API DeviceMotionEvent indisponible",
+      "Ce navigateur ne supporte pas du tout l'API DeviceMotionEvent.\n" +
+      "Navigateur : " + navigator.userAgent
+    );
+  }
+
+  // ============== Bille suivant la gravité ==============
+  const ball = document.getElementById("ball");
+  const dbgX = document.getElementById("dbgX");
+  const dbgY = document.getElementById("dbgY");
+  const dbgZ = document.getElementById("dbgZ");
+
+  const ARENA_RADIUS = 140 - 18; // rayon de l'arène moins le rayon de la bille
+  const SENSITIVITY = 8;         // facteur d'amplification du déplacement
+
+  function handleMotion(event) {
+    try {
+      const g = event.accelerationIncludingGravity;
+      if (!g || g.x === null) {
+        showError(
+          "Données de gravité indisponibles",
+          "event.accelerationIncludingGravity est null ou incomplet.\n" +
+          "Cela peut arriver sur certains appareils/navigateurs qui ne fournissent " +
+          "pas l'accéléromètre, même quand la permission est accordée.\n\n" +
+          "Contenu reçu : " + JSON.stringify(g)
+        );
+        return;
+      }
+
+      // x : inclinaison gauche/droite, y : inclinaison avant/arrière (portrait)
+      let offsetX = -g.x * SENSITIVITY;
+      let offsetY = g.y * SENSITIVITY;
+
+      // On limite la bille à l'intérieur du cercle de l'arène
+      const dist = Math.sqrt(offsetX * offsetX + offsetY * offsetY);
+      if (dist > ARENA_RADIUS) {
+        const ratio = ARENA_RADIUS / dist;
+        offsetX *= ratio;
+        offsetY *= ratio;
+      }
+
+      ball.style.transform = `translate(calc(-50% + ${offsetX}px), calc(-50% + ${offsetY}px))`;
+
+      dbgX.textContent = g.x.toFixed(2);
+      dbgY.textContent = g.y.toFixed(2);
+      dbgZ.textContent = g.z !== null ? g.z.toFixed(2) : "n/a";
+    } catch (err) {
+      showError("Erreur dans handleMotion", err.message + "\n\n" + err.stack);
+    }
+  }
+
+  document.getElementById("startBtn").addEventListener("click", () => {
+    try {
+      if (typeof DeviceMotionEvent !== "undefined" &&
+          typeof DeviceMotionEvent.requestPermission === "function") {
+        // iOS 13+ : permission explicite requise, déclenchée par ce clic
+        DeviceMotionEvent.requestPermission()
+          .then((state) => {
+            if (state === "granted") {
+              window.addEventListener("devicemotion", handleMotion);
+              document.getElementById("startScreen").style.display = "none";
+              document.getElementById("arenaWrap").style.display = "flex";
+            } else {
+              showError(
+                "Permission refusée",
+                "L'utilisateur (ou le système) a refusé l'accès au capteur de mouvement.\n" +
+                "État retourné : " + state + "\n\n" +
+                "Vérifie dans Réglages > Safari (ou Chrome) > si le site a été bloqué " +
+                "manuellement, ou réessaie en rechargeant la page."
+              );
+            }
+          })
+          .catch((err) => {
+            showError(
+              "Erreur lors de la demande de permission",
+              err.name + ": " + err.message + "\n\n" + (err.stack || "")
+            );
+          });
+      } else {
+        // Android / navigateurs qui n'exigent pas de permission explicite
+        window.addEventListener("devicemotion", handleMotion);
+        document.getElementById("startScreen").style.display = "none";
+        document.getElementById("arenaWrap").style.display = "flex";
+      }
+    } catch (err) {
+      showError("Erreur au démarrage", err.message + "\n\n" + err.stack);
+    }
+  });
+
+  // Si après 3 secondes d'activation aucune donnée n'est arrivée, on prévient
+  let firstMotionReceived = false;
+  const originalHandler = handleMotion;
+  window.addEventListener("devicemotion", () => { firstMotionReceived = true; }, { once: true });
+
+  document.getElementById("startBtn").addEventListener("click", () => {
+    setTimeout(() => {
+      if (!firstMotionReceived && document.getElementById("arenaWrap").style.display !== "none") {
+        showError(
+          "Aucune donnée reçue du capteur",
+          "La permission a été accordée mais aucun événement 'devicemotion' n'a été " +
+          "reçu après 3 secondes.\n\n" +
+          "Causes possibles :\n" +
+          "- Page servie en HTTP au lieu de HTTPS (voir le premier avertissement, " +
+          "si présent).\n" +
+          "- Réglages iOS : Réglages > Confidentialité et sécurité > Capteurs de mouvement " +
+          "et de fitness, vérifier que c'est activé.\n" +
+          "- Le navigateur a accordé la permission JS mais bloque silencieusement " +
+          "les données (connu sur certaines versions de Chrome iOS)."
+        );
+      }
+    }, 3000);
+  });
+</script>
+</body>
+</html>
