@@ -177,7 +177,7 @@
           <label for="mouseSensitivityX">Sensibilite horizontale</label>
           <span class="hint">1 = normal, -1 = gauche/droite inverse, 0 = aucun mouvement horizontal.</span>
         </div>
-        <input id="mouseSensitivityX" type="number" step="0.1" value="-1">
+        <input id="mouseSensitivityX" type="number" step="0.1" value="-0.6666666666">
       </div>
 
       <div class="field">
@@ -293,7 +293,7 @@
   document.getElementById("saveBtn").addEventListener("click", save);
   document.getElementById("resetBtn").addEventListener("click", () => {
     fillForm({
-      mouseSensitivityX: -1,
+      mouseSensitivityX: -0.6666666666,
       mouseSensitivityY: -1,
       warpTL: 0,
       warpTR: 0,
@@ -317,5 +317,6 @@
 </script>
 </body>
 </html>
+
 
 

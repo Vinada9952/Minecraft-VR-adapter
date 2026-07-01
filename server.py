@@ -115,7 +115,7 @@ PAGE_HTML_PATH = os.path.join(BASE_DIR, "page.html")
 SETTINGS_HTML_PATH = os.path.join(BASE_DIR, "settings.html")
 
 settings = {
-    "mouseSensitivityX": -1.0,
+    "mouseSensitivityX": -0.6666666666,
     "mouseSensitivityY": -1.0,
     "warpTL": 0.0,
     "warpTR": 0.0,
@@ -411,6 +411,7 @@ if __name__ == "__main__":
         )
         print(f"Serveur démarré : http://{HOST}:{PORT}")
         socketio.run(app, host=HOST, port=PORT)
+
 
 
 
