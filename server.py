@@ -411,11 +411,3 @@ if __name__ == "__main__":
         )
         print(f"Serveur démarré : http://{HOST}:{PORT}")
         socketio.run(app, host=HOST, port=PORT)
-
-
-
-
-
-
-
-
