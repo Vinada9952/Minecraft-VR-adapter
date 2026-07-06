@@ -12,10 +12,27 @@
     margin: 0;
     padding: 0;
     width: 100%;
-    height: 101%;
+    height: 100%;
     background: #000;
-    overflow-y: scroll;
+    overflow: hidden;
     font-family: -apple-system, sans-serif;
+  }
+
+  /* Simule un affichage PAYSAGE alors que l'OS reste verrouillé en PORTRAIT
+     (le verrou de rotation d'iPhone ne verrouille que le portrait). On
+     prend les dimensions du viewport portrait (étroit et haut), on les
+     inverse pour ce conteneur (large et bas), on le centre, puis on le
+     fait pivoter de 90° vers la gauche : le résultat visuel remplit
+     exactement l'écran comme si le téléphone tournait, sans que l'OS
+     ne bouge quoi que ce soit. */
+  #landscapeWrapper {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100vh;
+    height: 100vw;
+    transform: translate(-50%, -50%) rotate(90deg);
+    transform-origin: center center;
   }
 
   #vrContainer {
@@ -26,15 +43,20 @@
     --warpTR: 0;
     --warpBL: 0;
     --warpBR: 0;
+    --eyeGap: 0;
+    --eyeZoom: 1;
   }
 
   .eye {
-    width: 50%;
+    flex: 1 1 0;
     height: 100%;
     overflow: hidden;
     position: relative;
-    float: left;
     background: #000;
+  }
+
+  .eye.left {
+    margin-right: calc(var(--eyeGap, 0) * 1px);
   }
 
   .eye img {
@@ -51,6 +73,8 @@
       calc(100% - var(--warpBR) * 1%) calc(100% - var(--warpBR) * 1%),
       calc(var(--warpBL) * 1%) calc(100% - var(--warpBL) * 1%)
     );
+    transform: rotate(calc(var(--headRoll, 0) * 1deg)) scale(var(--eyeZoom, 1));
+    transform-origin: center center;
   }
 
   #startScreen {
@@ -102,27 +126,32 @@
 </head>
 <body>
 
-  <div id="startScreen">
-    <h1>Stream VR</h1>
-    <p id="fsHint">Pour un vrai plein écran (sans barre Safari), ouvre cette page,
-       appuie sur Partager → "Sur l'écran d'accueil", puis relance-la depuis
-       l'icône ajoutée. Sinon elle marche aussi directement dans Safari.</p>
+  <div id="landscapeWrapper">
 
-    <label for="sensSlider" style="font-size:13px;color:#aaa;">
-      Sensibilité souris : <span id="sensValue">1.0</span>x
-    </label>
-    <input type="range" id="sensSlider" min="0.1" max="5" step="0.1" value="1.0"
-           style="width:240px;margin:10px 0 22px;">
+    <div id="startScreen">
+      <h1>Stream VR</h1>
+      <p id="fsHint">Pour un vrai plein écran (sans barre Safari), ouvre cette page,
+         appuie sur Partager → "Sur l'écran d'accueil", puis relance-la depuis
+         l'icône ajoutée. Sinon elle marche aussi directement dans Safari.</p>
 
-    <button id="startBtn">Démarrer</button>
+      <label for="sensSlider" style="font-size:13px;color:#aaa;">
+        Sensibilité souris : <span id="sensValue">1.0</span>x
+      </label>
+      <input type="range" id="sensSlider" min="0.1" max="5" step="0.1" value="1.0"
+             style="width:240px;margin:10px 0 22px;">
+
+      <button id="startBtn">Démarrer</button>
+    </div>
+
+    <div id="vrContainer">
+      <div class="eye left"><img id="imgLeft" alt=""></div>
+      <div class="eye right"><img id="imgRight" alt=""></div>
+    </div>
+
+    <div id="status"></div>
+    <div id="debugRoll" style="position:fixed;bottom:8px;left:70px;color:#555;font-size:11px;z-index:999;font-family:monospace;"></div>
+
   </div>
-
-  <div id="vrContainer">
-    <div class="eye left"><img id="imgLeft" alt=""></div>
-    <div class="eye right"><img id="imgRight" alt=""></div>
-  </div>
-
-  <div id="status"></div>
 
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
   <script>
@@ -130,6 +159,8 @@
     const imgLeft = document.getElementById("imgLeft");
     const imgRight = document.getElementById("imgRight");
     const statusEl = document.getElementById("status");
+    const debugRollEl = document.getElementById("debugRoll");
+    const vrContainer = document.getElementById("vrContainer");
 
     let frameCount = 0;
     let lastFpsTime = Date.now();
@@ -146,11 +177,12 @@
     socket.emit("get_settings");
 
     socket.on("settings", (data) => {
-      const vrContainer = document.getElementById("vrContainer");
       vrContainer.style.setProperty("--warpTL", data.warpTL || 0);
       vrContainer.style.setProperty("--warpTR", data.warpTR || 0);
       vrContainer.style.setProperty("--warpBL", data.warpBL || 0);
       vrContainer.style.setProperty("--warpBR", data.warpBR || 0);
+      vrContainer.style.setProperty("--eyeGap", data.eyeGap || 0);
+      vrContainer.style.setProperty("--eyeZoom", data.eyeZoom || 1);
     });
 
     // Les frames arrivent en BINAIRE (ArrayBuffer), pas en base64 :
@@ -184,27 +216,91 @@
       sensValue.textContent = sensitivity.toFixed(1);
     });
 
+    // ---------- Roulis de la tête (tête penchée sur le côté) ----------
+    // Calculé à partir de la gravité (accelerationIncludingGravity), pas du
+    // gyroscope : un simple atan2 sur 2 axes ne souffre pas du gimbal lock
+    // qui affecte les angles absolus alpha/beta/gamma quand le téléphone
+    // est tenu vertical. Lissé pour éviter les tremblements.
+    //
+    // Calibré directement pour un usage en PAYSAGE (le layout 2 yeux
+    // côte à côte n'a de sens qu'en paysage de toute façon).
+    let currentRoll = 0; // en radians
+    const ROLL_SMOOTHING = 0.15;
+
+    // Un seul endroit à changer si le sens de rotation est inversé :
+    // passe à false si true ne donne pas le bon résultat.
+    const ROLL_INVERT = true;
+
+    function updateRoll(g) {
+      if (!g || g.x === null || g.y === null) return;
+
+      // -PI pour recaler le "0" sur la position à plat/niveau (sinon on
+      // partait de 180° au repos avec cette orientation d'axes).
+      let raw = Math.atan2(g.y, g.x) - Math.PI;
+      if (raw < -Math.PI) raw += 2 * Math.PI;
+
+      // Ramène la différence dans [-PI, PI] pour éviter un saut au passage 180°
+      let diff = raw - currentRoll;
+      while (diff > Math.PI) diff -= 2 * Math.PI;
+      while (diff < -Math.PI) diff += 2 * Math.PI;
+
+      currentRoll += diff * ROLL_SMOOTHING;
+      while (currentRoll > Math.PI) currentRoll -= 2 * Math.PI;
+      while (currentRoll < -Math.PI) currentRoll += 2 * Math.PI;
+    }
+
     // ---------- Gyroscope ----------
-    // On utilise rotationRate (vitesse de rotation brute en °/s) plutôt que
-    // les angles absolus alpha/beta/gamma. Ces derniers subissent un
-    // "gimbal lock" quand le téléphone est tenu à la verticale (comme en VR,
-    // beta proche de 90°), ce qui provoque des sauts brusques de la souris.
-    // rotationRate vient directement du gyroscope, sans ce calcul d'angle
-    // instable : pas de saut possible.
     let lastSent = 0;
     const SEND_INTERVAL_MS = 16; // ~60 envois/seconde max
 
     function handleMotion(event) {
+      const g = event.accelerationIncludingGravity;
+      updateRoll(g);
+
+      const rollDeg = (ROLL_INVERT ? -1 : 1) * currentRoll * 180 / Math.PI;
+      document.documentElement.style.setProperty("--headRoll", rollDeg.toFixed(2));
+
+      // Debug en direct : compare ce que tu vois à ce que tu fais avec le
+      // téléphone. gx/gy sont les valeurs brutes de l'accéléromètre,
+      // roll est l'angle calculé (0° = à plat / pas d'inclinaison).
+      if (g && g.x !== null) {
+        debugRollEl.textContent =
+          `gx=${g.x.toFixed(1)} gy=${g.y.toFixed(1)} roll=${rollDeg.toFixed(0)}°`;
+      }
+
       const now = Date.now();
       if (now - lastSent < SEND_INTERVAL_MS) return;
       lastSent = now;
 
       const r = event.rotationRate;
-      if (!r || r.beta === null || r.gamma === null) return;
+      if (!r || r.beta === null) return;
+
+      // Vitesses de rotation brutes, dans le repère du TÉLÉPHONE.
+      const yawRateRaw = r.alpha;   // lacet (tourner la tête gauche/droite)
+      const pitchRateRaw = r.beta;  // tangage (hocher la tête haut/bas)
+
+      if (yawRateRaw === null || pitchRateRaw === null) return;
+
+      // Projection dans le repère de la TÊTE (= repère du monde réel) :
+      // on fait tourner le vecteur (yaw, pitch) pour que le mouvement de
+      // la souris corresponde à une rotation ABSOLUE dans le monde réel
+      // plutôt qu'au repère local du téléphone.
+      //
+      // Calibré sur 2 points fiables et faciles à reproduire :
+      // - à plat (roulis = 0) : les 2 axes doivent être inversés (rotation
+      //   de 180°)
+      // - tourné à 90° : comportement déjà correct (rotation de 90°,
+      //   qui échange naturellement les 2 axes)
+      // Une seule rotation cohérente de (180° - roulis) satisfait les 2 :
+      const phi = Math.PI - currentRoll;
+      const cosR = Math.cos(phi);
+      const sinR = Math.sin(phi);
+      const yawRate = yawRateRaw * cosR - pitchRateRaw * sinR;
+      const pitchRate = yawRateRaw * sinR + pitchRateRaw * cosR;
+
       socket.emit("gyro", {
-        beta: r.beta,    // vitesse de tangage (°/s) -> regarder haut/bas
-        // gamma: r.gamma,  // vitesse de roulis (°/s)  -> regarder gauche/droite (téléphone vertical)
-        gamma: r.alpha,  // vitesse de roulis (°/s)  -> regarder gauche/droite (téléphone vertical)
+        beta: pitchRate,
+        gamma: yawRate,
         sensitivity: sensitivity
       });
     }
@@ -239,12 +335,6 @@
       if (req) {
         req.call(el).catch(() => {});
       }
-      // Astuce pour réduire (pas supprimer) la barre d'adresse Safari :
-      // on force un micro-scroll, répété car Safari la fait parfois
-      // réapparaître juste après le chargement.
-      window.scrollTo(0, 1);
-      setTimeout(() => window.scrollTo(0, 1), 300);
-      setTimeout(() => window.scrollTo(0, 1), 1000);
     }
 
     // Si la page est déjà lancée depuis l'icône "écran d'accueil", on est
@@ -280,7 +370,7 @@
       requestWakeLock();
 
       document.getElementById("startScreen").style.display = "none";
-      document.getElementById("vrContainer").style.display = "block";
+      document.getElementById("vrContainer").style.display = "flex";
     });
   </script>
 </body>

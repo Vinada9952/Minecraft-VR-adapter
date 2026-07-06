@@ -21,7 +21,7 @@ Lancement :
     python server.py
 
 Puis sur l'iPhone (connecté au MEME réseau Wi-Fi que le PC) :
-    - aller sur https://192.168.0.118:5000/
+    - aller sur https://192.168.0.120:5000/
       (HTTPS est nécessaire pour que le gyroscope fonctionne sur iOS ;
       le certificat est généré via mkcert, voir CERT_FILE / KEY_FILE ci-dessous)
 
@@ -44,13 +44,6 @@ from flask import Flask, Response, request
 from flask_socketio import SocketIO
 
 # ---------- SendInput (mouvement souris relatif bas niveau) ----------
-# pyautogui/SetCursorPos déplace la position ABSOLUE du curseur, ce que
-# beaucoup de jeux (dont Minecraft avec "Raw Input" activé) ignorent
-# complètement : ils lisent directement les deltas du périphérique via
-# l'API Windows Raw Input (WM_INPUT). SendInput, lui, injecte un vrai
-# mouvement RELATIF dans la même file d'événements que la souris physique,
-# ce qui est correctement capté par ces jeux.
-
 PUL = ctypes.POINTER(ctypes.c_ulong)
 
 
@@ -86,27 +79,19 @@ def send_mouse_relative(dx, dy):
     ctypes.windll.user32.SendInput(1, ctypes.pointer(command), ctypes.sizeof(command))
 
 # ---------- Configuration ----------
-JPEG_QUALITY = 60          # qualité de compression JPEG (0-100), baisse = plus rapide
-TARGET_WIDTH = 1280        # largeur de l'image envoyée, baisse = plus rapide
-FPS_TARGET = 60            # nombre d'images par seconde visé (limité par le PC/réseau)
-MONITOR_INDEX = 3          # index de l'écran à capturer (voir liste affichée au démarrage)
+JPEG_QUALITY = 60
+TARGET_WIDTH = 1280
+FPS_TARGET = 60
+MONITOR_INDEX = 3
 
-# Sensibilité de base du gyroscope -> souris. C'est LA variable à calibrer.
-# Plus haut = la souris bouge plus vite pour un même mouvement de tête.
-# Le slider sur la page web vient MULTIPLIER cette valeur en temps réel,
-# donc tu peux la laisser telle quelle et calibrer directement depuis l'iPhone.
 MOUSE_SENSITIVITY = 25.0
 
 HOST = "0.0.0.0"
 PORT = 5000
 
-# Certificat HTTPS généré via mkcert (nécessaire pour que l'iPhone autorise
-# l'accès au gyroscope). Les fichiers doivent être dans le même dossier que
-# ce script.
-CERT_FILE = "192.168.0.118+2.pem"
-KEY_FILE = "192.168.0.118+2-key.pem"
+CERT_FILE = "192.168.0.120+2.pem"
+KEY_FILE = "192.168.0.120+2-key.pem"
 
-# ---------- Initialisation Flask / Socket.IO ----------
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
 
@@ -115,15 +100,16 @@ PAGE_HTML_PATH = os.path.join(BASE_DIR, "page.html")
 SETTINGS_HTML_PATH = os.path.join(BASE_DIR, "settings.html")
 
 settings = {
-    "mouseSensitivityX": -0.6666666666,
-    "mouseSensitivityY": -1.0,
+    "mouseSensitivityX": 0.6666666666,
+    "mouseSensitivityY": 1.0,
     "warpTL": 0.0,
     "warpTR": 0.0,
     "warpBL": 0.0,
     "warpBR": 0.0,
+    "eyeGap": 0.0,
+    "eyeZoom": 1.0,
 }
 
-# ---------- Capture d'Ã©cran ----------
 sct = mss.MSS()
 
 print("Écrans détectés (mss.monitors) :")
@@ -140,9 +126,6 @@ ENCODE_PARAMS = [int(cv2.IMWRITE_JPEG_QUALITY), JPEG_QUALITY, int(cv2.IMWRITE_JP
 
 
 def get_cursor_overlay():
-    """Récupère l'image du curseur Windows actuel et sa position à l'écran.
-    Retourne (image_bgra, hotspot_x, hotspot_y, screen_x, screen_y) ou None
-    si le curseur n'est pas visible / en cas d'erreur."""
     try:
         flags, hcursor, (x, y) = win32gui.GetCursorInfo()
         if flags != win32con.CURSOR_SHOWING:
@@ -152,7 +135,7 @@ def get_cursor_overlay():
         hotspot_x, hotspot_y = hicon_info[1], hicon_info[2]
         hbm_mask, hbm_color = hicon_info[3], hicon_info[4]
 
-        size = 32  # taille standard d'un curseur Windows
+        size = 32
 
         hdc_screen = win32gui.GetDC(0)
         hdc_mem = win32ui.CreateDCFromHandle(hdc_screen)
@@ -185,27 +168,23 @@ def get_cursor_overlay():
 
 
 def draw_cursor_on_image(img, monitor_left, monitor_top):
-    """Incruste le curseur sur l'image capturée (img modifiée en place, BGR)."""
     overlay = get_cursor_overlay()
     if overlay is None:
         return
 
     cursor_img, hotspot_x, hotspot_y, screen_x, screen_y = overlay
 
-    # Position du curseur relative à l'écran capturé
     px = screen_x - monitor_left - hotspot_x
     py = screen_y - monitor_top - hotspot_y
 
     ch, cw = cursor_img.shape[:2]
     h, w = img.shape[:2]
 
-    # Zone de l'image de destination qui va recevoir le curseur (avec clipping)
     x0, y0 = max(px, 0), max(py, 0)
     x1, y1 = min(px + cw, w), min(py + ch, h)
     if x0 >= x1 or y0 >= y1:
-        return  # le curseur est hors de l'écran capturé
+        return
 
-    # Zone correspondante dans l'image du curseur
     cx0, cy0 = x0 - px, y0 - py
     cx1, cy1 = cx0 + (x1 - x0), cy0 + (y1 - y0)
 
@@ -219,29 +198,23 @@ def draw_cursor_on_image(img, monitor_left, monitor_top):
 
 
 def capture_loop():
-    """Boucle de capture d'écran tournant dans une tâche de fond Socket.IO."""
     global streaming
     frame_interval = 1.0 / FPS_TARGET
 
     while streaming:
         t0 = time.time()
 
-        # Capture brute de l'Ã©cran (BGRA). On enlÃ¨ve juste le canal alpha
-        # par slicing (beaucoup plus rapide qu'un cv2.cvtColor).
         raw = np.array(sct.grab(monitor))
-        img = raw[:, :, :3].copy()  # .copy() car on va modifier l'image (curseur)
+        img = raw[:, :, :3].copy()
 
-        # mss ne capture pas le curseur de la souris -> on le dessine nous-mÃªmes
         draw_cursor_on_image(img, monitor["left"], monitor["top"])
 
-        # Redimensionnement (garde le ratio d'aspect)
         h, w = img.shape[:2]
         scale = TARGET_WIDTH / w
         resized = cv2.resize(
             img, (TARGET_WIDTH, int(h * scale)), interpolation=cv2.INTER_NEAREST
         )
 
-        # Encodage JPEG -> bytes bruts envoyÃ©s directement en binaire
         ok, buffer = cv2.imencode(".jpg", resized, ENCODE_PARAMS)
         if ok:
             for sid in list(stream_clients):
@@ -252,13 +225,11 @@ def capture_loop():
         if sleep_time > 0:
             socketio.sleep(sleep_time)
         else:
-            socketio.sleep(0)  # laisse la main aux autres tÃ¢ches
+            socketio.sleep(0)
 
 
 @app.route("/")
 def index():
-    # On lit le fichier brut plutôt que render_template, pour éviter
-    # que Jinja n'interprète des accolades présentes dans le JS de page.html
     with open(PAGE_HTML_PATH, "r", encoding="utf-8") as f:
         return Response(f.read(), mimetype="text/html")
 
@@ -302,7 +273,6 @@ GYRO_DEADZONE_DPS = 0.8
 
 
 def move_mouse_relative(dx, dy):
-    """Déplace la souris de façon RELATIVE via SendInput."""
     global mouse_remainder
 
     mouse_remainder["x"] += dx
@@ -346,9 +316,10 @@ def on_update_settings(data):
 
 @socketio.on("gyro")
 def on_gyro(data):
-    """Reçoit les vitesses de rotation du téléphone et déplace la souris.
-    La page envoie event.rotationRate, donc les valeurs sont déjà en degrés/seconde.
-    """
+    """Reçoit les vitesses de rotation déjà projetées dans le repère de la
+    tête par le client (voir page.html : la rotation par le roulis y est
+    appliquée avant l'envoi), donc rien à faire de spécial ici pour le
+    roulis - le serveur reste inchangé."""
     global last_gyro_time
 
     yaw_rate = data.get("gamma")
@@ -386,7 +357,7 @@ def on_gyro(data):
     sensitivity_y = MOUSE_SENSITIVITY * settings["mouseSensitivityY"] * sensitivity_multiplier
 
     dx = yaw_rate * sensitivity_x * dt
-    dy = -pitch_rate * sensitivity_y * dt  # inversé : tête en haut = viser en haut
+    dy = -pitch_rate * sensitivity_y * dt
 
     print(
         f"[gyro] yaw={yaw_rate:6.1f} pitch={pitch_rate:6.1f} "
