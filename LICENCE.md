@@ -1,6 +1,6 @@
 ﻿# Personal Use Only Licence
 
-Copyright (c) 2026 Vincent Boucher
+Copyright (c) 2026 Vincent Tuê Minh Boucher
 
 This project and all associated files are provided for personal use only.
 
