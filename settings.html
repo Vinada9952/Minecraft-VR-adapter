@@ -194,7 +194,7 @@
           <label for="mouseSensitivityX">Sensibilite horizontale</label>
           <span class="hint">1 = normal, -1 = gauche/droite inverse, 0 = aucun mouvement horizontal.</span>
         </div>
-        <input id="mouseSensitivityX" type="number" step="0.1" value="-0.6666666666">
+        <input id="mouseSensitivityX" type="number" step="0.1" value="0.666666666666">
       </div>
 
       <div class="field">
@@ -202,7 +202,7 @@
           <label for="mouseSensitivityY">Sensibilite verticale</label>
           <span class="hint">1 = normal, -1 = haut/bas inverse, 0 = aucun mouvement vertical.</span>
         </div>
-        <input id="mouseSensitivityY" type="number" step="0.1" value="-1">
+        <input id="mouseSensitivityY" type="number" step="0.1" value="1">
       </div>
 
       <h2>Ecran (2 yeux)</h2>
@@ -212,7 +212,7 @@
           <label for="eyeGap">Distance entre les images</label>
           <span class="hint">En pixels. 0 = images collees. Augmente si tu vois double (images trop chevauchees), diminue si elles sont trop ecartees pour fusionner.</span>
         </div>
-        <input id="eyeGap" type="number" step="1" value="0">
+        <input id="eyeGap" type="number" step="1" value="-65">
       </div>
 
       <div class="field">
@@ -220,7 +220,7 @@
           <label for="eyeZoom">Zoom par oeil</label>
           <span class="hint">1 = taille normale. Plus grand = image zoomee (utile pour cacher les coins noirs pendant la rotation de tete). Plus petit = image reduite.</span>
         </div>
-        <input id="eyeZoom" type="number" step="0.05" value="1">
+        <input id="eyeZoom" type="number" step="0.05" value="0.75">
       </div>
 
       <h2>Warping des coins</h2>
@@ -340,14 +340,14 @@
   document.getElementById("saveBtn").addEventListener("click", save);
   document.getElementById("resetBtn").addEventListener("click", () => {
     fillForm({
-      mouseSensitivityX: -0.6666666666,
-      mouseSensitivityY: -1,
+      mouseSensitivityX: 0.666666666666,
+      mouseSensitivityY: 1,
       warpTL: 0,
       warpTR: 0,
       warpBL: 0,
       warpBR: 0,
-      eyeGap: 0,
-      eyeZoom: 1
+      eyeGap: -65,
+      eyeZoom: 0.75
     });
     save();
   });
