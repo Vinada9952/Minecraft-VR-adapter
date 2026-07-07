@@ -101,13 +101,13 @@ SETTINGS_HTML_PATH = os.path.join(BASE_DIR, "settings.html")
 
 settings = {
     "mouseSensitivityX": 0.6666666666,
-    "mouseSensitivityY": 1.0,
+    "mouseSensitivityY": 0.68,
     "warpTL": 0.0,
     "warpTR": 0.0,
     "warpBL": 0.0,
     "warpBR": 0.0,
-    "eyeGap": 0.0,
-    "eyeZoom": 1.0,
+    "eyeGap": -65,
+    "eyeZoom": 0.9,
 }
 
 sct = mss.MSS()
