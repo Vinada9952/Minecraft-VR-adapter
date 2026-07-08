@@ -4,7 +4,6 @@ import math
 import queue
 import tkinter as tk
 
-import pyautogui
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 
@@ -168,9 +167,6 @@ def button_pressed(name):
 
     elif name == "x":
         hotkey(Key.ctrl, Key.cmd, "o")
-        pyautogui.moveTo(1400, 575)
-        time.sleep(1)
-        pyautogui.click()
 
     elif name == "y":
         hotkey(Key.ctrl)
