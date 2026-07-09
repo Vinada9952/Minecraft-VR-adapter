@@ -4,6 +4,7 @@ import math
 import queue
 import tkinter as tk
 
+import pyautogui
 from pynput.keyboard import Controller as KeyboardController, Key
 from pynput.mouse import Controller as MouseController, Button
 
@@ -125,12 +126,17 @@ virtual_gamepad = None
 left = None
 right = None
 
+home_held = False
+GYRO_MOUSE_SENSITIVITY = 0.05  # à ajuster selon la sensibilité souhaitée
+
 ui_queue = queue.Queue()
 
 BUTTON_LAYOUT = [
     ["a", "b", "x", "y"],
-    ["plus", "minus", "capture"],
+    ["plus", "minus", "capture", "home"],
     ["zr", "zl", "right_sr", "left_sl"],
+    ["left", "right", "up", "down"],
+    ["l", "left_sr", "right_sl"]
 ]
 
 
@@ -150,9 +156,10 @@ def hotkey(*keys):
 # =======================================================
 
 def button_pressed(name):
-    global mouse_left, mouse_right, last_scroll, b_toggle
+    global mouse_left, mouse_right, last_scroll, b_toggle, home_held
 
     ui_queue.put(("button", name, True))
+    print( f"Button pressed: {name}" )
 
     if name == "a":
         keyboard.press(Key.space)
@@ -165,13 +172,16 @@ def button_pressed(name):
             keyboard.release(Key.shift)
             b_toggle = False
 
-    elif name == "x":
+    elif name == "plus":
         hotkey(Key.ctrl, Key.cmd, "o")
+        pyautogui.moveTo(1400, 575)
+        time.sleep(1)
+        pyautogui.click()
 
     elif name == "y":
         hotkey(Key.ctrl)
 
-    elif name == "plus":
+    elif name == "x":
         keyboard.press("e")
         keyboard.release("e")
 
@@ -206,12 +216,40 @@ def button_pressed(name):
             mouse.scroll(0, 1)
             last_scroll = now
 
+    elif name == "home":
+        home_held = True
+    
+    elif name == "left":
+        keyboard.press( "1" )
+        keyboard.release( "1" )
+    
+    elif name == "down":
+        keyboard.press( "v" )
+        keyboard.release( "v" )
+    
+    elif name == "up":
+        keyboard.press( "f" )
+        keyboard.release( "f" )
+    
+    elif name == "right":
+        keyboard.press( "j" )
+        keyboard.release( "j" )
+    
+    elif name == "l":
+        hotkey( Key.alt, 'i' )
+    
+    elif name == "left_sr":
+        hotkey( Key.alt, '8' )
+    
+    elif name == "right_sl":
+        hotkey( Key.alt, '9' )
+
 
 def button_released(name):
-    global mouse_left, mouse_right
+    global mouse_left, mouse_right, home_held
 
     ui_queue.put(("button", name, False))
-
+    print( f"Button released: {name}" )
     if name == "zr":
         if mouse_left:
             mouse.release(Button.left)
@@ -226,6 +264,9 @@ def button_released(name):
 
     elif name == "a":
         keyboard.release(Key.space)
+
+    elif name == "home":
+        home_held = False
 
 
 def process_events(events):
@@ -470,6 +511,31 @@ def right_loop():
 def left_stick_loop():
     while True:
         update_left_stick_state()
+        time.sleep(0.01)
+
+
+def right_gyro_mouse_loop():
+    """
+    Déplace la souris avec le gyroscope de la manette droite, mais UNIQUEMENT
+    tant que le bouton HOME est maintenu enfoncé. Dès qu'il est relâché,
+    la souris ne bouge plus.
+    """
+    while True:
+        if home_held and right is not None:
+            try:
+                gx = right.get_gyro_y()
+                gy = right.get_gyro_z()
+            except Exception:
+                gx = gy = 0
+
+            # Sens/axes à ajuster selon l'orientation de tenue de la manette.
+            dx = int(gy * GYRO_MOUSE_SENSITIVITY)
+            dy = int(-gx * GYRO_MOUSE_SENSITIVITY)
+
+            if dx or dy:
+                cx, cy = mouse.position
+                mouse.position = (cx + dx, cy + dy)
+
         time.sleep(0.01)
 
 
@@ -974,6 +1040,7 @@ def connect_and_run():
         threading.Thread(target=left_loop, daemon=True).start()
         threading.Thread(target=right_loop, daemon=True).start()
         threading.Thread(target=left_stick_loop, daemon=True).start()
+        threading.Thread(target=right_gyro_mouse_loop, daemon=True).start()
         threading.Thread(target=battery_loop, daemon=True).start()
 
         root.after(0, app.open_calibration_wizard)

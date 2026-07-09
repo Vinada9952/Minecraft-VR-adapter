@@ -42,6 +42,10 @@ import win32gui
 import win32ui
 from flask import Flask, Response, request
 from flask_socketio import SocketIO
+import threading
+
+joycon = threading.Thread( target=os.system, args=("python3 joycon_mapper.py",) )
+joycon.start()
 
 # ---------- SendInput (mouvement souris relatif bas niveau) ----------
 PUL = ctypes.POINTER(ctypes.c_ulong)
@@ -82,7 +86,8 @@ def send_mouse_relative(dx, dy):
 JPEG_QUALITY = 60
 TARGET_WIDTH = 1280
 FPS_TARGET = 60
-MONITOR_INDEX = 3
+# MONITOR_INDEX = 3
+MONITOR_INDEX = 1
 
 MOUSE_SENSITIVITY = 25.0
 
@@ -101,7 +106,7 @@ SETTINGS_HTML_PATH = os.path.join(BASE_DIR, "settings.html")
 
 settings = {
     "mouseSensitivityX": 0.6666666666,
-    "mouseSensitivityY": 0.68,
+    "mouseSensitivityY": 1,
     "warpTL": 0.0,
     "warpTR": 0.0,
     "warpBL": 0.0,
