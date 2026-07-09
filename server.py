@@ -44,8 +44,8 @@ from flask import Flask, Response, request
 from flask_socketio import SocketIO
 import threading
 
-joycon = threading.Thread( target=os.system, args=("python3 joycon_mapper.py",) )
-joycon.start()
+# joycon = threading.Thread( target=os.system, args=("python3 joycon_mapper.py",) )
+# joycon.start()
 
 # ---------- SendInput (mouvement souris relatif bas niveau) ----------
 PUL = ctypes.POINTER(ctypes.c_ulong)
