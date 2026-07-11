@@ -86,8 +86,8 @@ def send_mouse_relative(dx, dy):
 JPEG_QUALITY = 60
 TARGET_WIDTH = 1280
 FPS_TARGET = 60
-# MONITOR_INDEX = 3
-MONITOR_INDEX = 1
+MONITOR_INDEX = 3
+# MONITOR_INDEX = 1
 
 MOUSE_SENSITIVITY = 25.0
 
@@ -121,7 +121,10 @@ print("Écrans détectés (mss.monitors) :")
 for i, m in enumerate(sct.monitors):
     print(f"  [{i}] {m}")
 
-monitor = sct.monitors[MONITOR_INDEX]
+try:
+    monitor = sct.monitors[MONITOR_INDEX]
+except IndexError:
+    monitor = sct.monitors[1]
 print(f"-> Capture de l'écran index {MONITOR_INDEX} : {monitor}")
 
 streaming = False
