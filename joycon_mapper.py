@@ -127,7 +127,7 @@ left = None
 right = None
 
 home_held = False
-GYRO_MOUSE_SENSITIVITY = 0.05  # à ajuster selon la sensibilité souhaitée
+GYRO_MOUSE_SENSITIVITY = 0.02  # à ajuster selon la sensibilité souhaitée
 
 ui_queue = queue.Queue()
 

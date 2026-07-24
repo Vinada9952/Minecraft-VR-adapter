@@ -21,7 +21,7 @@ Lancement :
     python server.py
 
 Puis sur l'iPhone (connecté au MEME réseau Wi-Fi que le PC) :
-    - aller sur https://192.168.0.120:5000/
+    - aller sur https://192.168.1.162:5000/
       (HTTPS est nécessaire pour que le gyroscope fonctionne sur iOS ;
       le certificat est généré via mkcert, voir CERT_FILE / KEY_FILE ci-dessous)
 
@@ -94,8 +94,8 @@ MOUSE_SENSITIVITY = 25.0
 HOST = "0.0.0.0"
 PORT = 5000
 
-CERT_FILE = "192.168.0.120+2.pem"
-KEY_FILE = "192.168.0.120+2-key.pem"
+CERT_FILE = "192.168.1.162+2.pem"
+KEY_FILE = "192.168.1.162+2-key.pem"
 
 app = Flask(__name__)
 socketio = SocketIO(app, async_mode="threading", cors_allowed_origins="*")
